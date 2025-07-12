@@ -1,13 +1,12 @@
 import customtkinter
 from core.loaders import DatabaseLoader, GeminiModelLoader
+from core.tools import execute_query, generate_answer_from_llm
 
 customtkinter.set_default_color_theme("green")
 
-from core.tools import execute_query, generate_answer_from_llm
 class App(customtkinter.CTk):
     def __init__(self):
         self.build_widgets()
-
 
     def build_widgets(self):
         self._db = DatabaseLoader()
@@ -17,16 +16,13 @@ class App(customtkinter.CTk):
         self.title("Natural SQL")
         self.geometry("1000x700")
 
-        # Configure grid layout (sidebar + main content)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sidebar frame
         self.sidebar_frame = customtkinter.CTkFrame(self, width=180, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=1)
 
-        # Sidebar widgets
         self.logo_label = customtkinter.CTkLabel(
             self.sidebar_frame,
             text="Natural SQL",
@@ -49,7 +45,6 @@ class App(customtkinter.CTk):
         )
         self.sidebar_button_3.grid(row=3, column=0, padx=20, pady=10)
 
-        # Appearance mode and scaling options
         self.appearance_mode_label = customtkinter.CTkLabel(
             self.sidebar_frame, text="Appearance Mode:", anchor="w"
         )
@@ -72,23 +67,20 @@ class App(customtkinter.CTk):
         )
         self.scaling_optionemenu.grid(row=8, column=0, padx=20, pady=(0, 20))
 
-        # Set default appearance and scaling
         self.appearance_mode_optionemenu.set("System")
         self.scaling_optionemenu.set("100%")
 
-        # Main content frame
         self.main_frame = customtkinter.CTkFrame(self, corner_radius=0)
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         self.main_frame.grid_columnconfigure(0, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
 
-        # Create Tabview inside main_frame
         self.tabview = customtkinter.CTkTabview(self.main_frame)
         self.tabview.grid(row=0, column=0, sticky="nsew")
         self.tabview.add("Main Query")
         self.tabview.add("DB Connections")
 
-        # === Tab 1: Main Query UI ===
+        # === Main Query Tab ===
         tab1 = self.tabview.tab("Main Query")
         tab1.grid_columnconfigure(0, weight=1)
         tab1.grid_rowconfigure(2, weight=1)
@@ -105,6 +97,7 @@ class App(customtkinter.CTk):
             tab1, placeholder_text="e.g., Show me all users from New York"
         )
         self.query_entry.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+
         self.exec_raw_button = customtkinter.CTkButton(
             tab1, text="Execute Query", command=self.execute_query
         )
@@ -112,53 +105,29 @@ class App(customtkinter.CTk):
 
         self.sql_textbox = customtkinter.CTkTextbox(tab1, wrap="word")
         self.sql_textbox.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="nsew")
-        self.sql_textbox.insert("0.0", "Generated SQL will appear here...")
 
-        self.execute_button = customtkinter.CTkButton(
-            tab1, text="Generate SQL & Execute", command=self.execute_query
+        self.reports_button = customtkinter.CTkButton(
+            tab1, text="Generate Reports", command=self.generate_reports
         )
-        self.execute_button.grid(row=3, column=0, padx=10, pady=10)
+        self.reports_button.grid(row=3, column=0, padx=10, pady=10)
 
         self.results_textbox = customtkinter.CTkTextbox(tab1, wrap="word")
         self.results_textbox.grid(row=4, column=0, padx=10, pady=(0, 10), sticky="nsew")
-        self.results_textbox.insert("0.0", "Query results will appear here...")
         self.results_textbox.configure(state="disabled")
 
-        # === Tab 2: DB Connections UI ===
+        # === DB Connections Tab ===
         tab2 = self.tabview.tab("DB Connections")
         tab2.grid_columnconfigure(1, weight=1)
 
-        db_label = customtkinter.CTkLabel(
-            tab2,
-            text="Database Connection Setup",
-            font=customtkinter.CTkFont(size=16, weight="bold"),
-        )
-        db_label.grid(row=0, column=0, columnspan=2, pady=(10, 20))
+        labels = ["Host:", "Port:", "Username:", "Password:", "Database Name:"]
+        placeholders = ["localhost", "5432", "user", "password", "mydatabase"]
+        self.entries = []
 
-        host_label = customtkinter.CTkLabel(tab2, text="Host:")
-        host_label.grid(row=1, column=0, padx=10, pady=5, sticky="e")
-        self.host_entry = customtkinter.CTkEntry(tab2, placeholder_text="localhost")
-        self.host_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
-
-        port_label = customtkinter.CTkLabel(tab2, text="Port:")
-        port_label.grid(row=2, column=0, padx=10, pady=5, sticky="e")
-        self.port_entry = customtkinter.CTkEntry(tab2, placeholder_text="5432")
-        self.port_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
-
-        user_label = customtkinter.CTkLabel(tab2, text="Username:")
-        user_label.grid(row=3, column=0, padx=10, pady=5, sticky="e")
-        self.user_entry = customtkinter.CTkEntry(tab2, placeholder_text="user")
-        self.user_entry.grid(row=3, column=1, padx=10, pady=5, sticky="ew")
-
-        password_label = customtkinter.CTkLabel(tab2, text="Password:")
-        password_label.grid(row=4, column=0, padx=10, pady=5, sticky="e")
-        self.password_entry = customtkinter.CTkEntry(tab2, placeholder_text="password", show="*")
-        self.password_entry.grid(row=4, column=1, padx=10, pady=5, sticky="ew")
-
-        dbname_label = customtkinter.CTkLabel(tab2, text="Database Name:")
-        dbname_label.grid(row=5, column=0, padx=10, pady=5, sticky="e")
-        self.dbname_entry = customtkinter.CTkEntry(tab2, placeholder_text="mydatabase")
-        self.dbname_entry.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
+        for i, (label, placeholder) in enumerate(zip(labels, placeholders)):
+            customtkinter.CTkLabel(tab2, text=label).grid(row=i+1, column=0, padx=10, pady=5, sticky="e")
+            entry = customtkinter.CTkEntry(tab2, placeholder_text=placeholder, show="*" if label == "Password:" else None)
+            entry.grid(row=i+1, column=1, padx=10, pady=5, sticky="ew")
+            self.entries.append(entry)
 
         connect_button = customtkinter.CTkButton(
             tab2, text="Connect", command=self.connect_to_database
@@ -166,76 +135,81 @@ class App(customtkinter.CTk):
         connect_button.grid(row=6, column=0, columnspan=2, pady=20)
 
 
+    def generate_reports(self):
+        """Generate reports using the agent executor of the answer from the llm to be presented to stakeholders."""
+        try:
+           pass
 
+        except Exception as e:
+            self._display_result(f"Error generating reports: {str(e)}")
+        
     def execute_query(self):
         query = self.query_entry.get()
-        if query:
-            print(f"User query: {query}")
-            # Simulated SQL generation and results display
-            generated_query_state = self.generate_sql_from_model()
-            executed_results = execute_query(generated_query_state,self.db_instance )
+        if not query:
+            self._display_result("Please enter a query.")
+            return
 
-            natural_language_answer = generate_answer_from_llm({
-                "question":"what is the total number of Employees",
-                "query":generated_query_state,
-                "result":f"{executed_results}"
-            }, self.gemini_model.model)
+        print(f"User query: {query}")
+        state = self.generate_sql_from_model()
+        executed_results = execute_query(state, self.db_instance)
+        state["result"] = executed_results["result"]
 
-            simulated_result = (
-                f"SQL: {generated_query_state}\n\nDB Result:\n {executed_results} \n\n\n\nAnswer: {natural_language_answer.get("answer", "I did not get anything")}"
-                
-               
-            )
-            print(natural_language_answer)
-            print("result", executed_results)
-            self.results_textbox.configure(state="normal")
-            self.results_textbox.delete("0.0", "end")
-            self.results_textbox.insert("0.0", simulated_result)
-            self.results_textbox.configure(state="disabled")
+        natural_language_answer = generate_answer_from_llm(state, self.gemini_model.model)
+        state["answer"] = natural_language_answer["answer"]
+
+        self.results_textbox.configure(state="normal")
+        self.results_textbox.delete("0.0", "end")
+
+        for step in self.gemini_model.agent_executor.stream(
+            {"messages": [{"role": "user", "content": state["question"]}]},
+            stream_mode="values",
+        ):
+            step_output = step["messages"][-1].content
+            self.results_textbox.insert("end", f"Step Output:\n{step_output}\n\n")
+            self.results_textbox.update_idletasks()
+
+        self.results_textbox.insert("end", f"Generated SQL:\n{state['query']}\n\n")
+        self.results_textbox.insert("end", f"Natural Language Answer:\n{state['answer']}\n")
+        self.results_textbox.configure(state="disabled")
+
+        self.sql_textbox.delete("0.0", "end")
+        self.sql_textbox.insert("0.0", state["query"])
+
+    def generate_sql_from_model(self) -> dict:
+        try:
+            question = self.query_entry.get()
+            if not question:
+                raise ValueError("Empty query")
+
+            state = {"question": question}
+            ret = self.gemini_model.get_sql_query(state)
+            state["query"] = ret["query"]
+            return state
+        except Exception as e:
             self.sql_textbox.delete("0.0", "end")
-            self.sql_textbox.insert("0.0", f"---")
-            self.generate_sql_from_model()
-        else:
-            self.results_textbox.configure(state="normal")
-            self.results_textbox.delete("0.0", "end")
-            self.results_textbox.insert("0.0", "Please enter a query.")
-            self.results_textbox.configure(state="disabled")
+            self.sql_textbox.insert("0.0", f"Error: {str(e)}")
+            return {"question": "", "query": "", "result": "", "answer": ""}
 
     def connect_to_database(self):
-        host = self.host_entry.get()
-        port = self.port_entry.get()
-        user = self.user_entry.get()
-        password = self.password_entry.get()
-        dbname = self.dbname_entry.get()
+        host, port, user, password, dbname = (entry.get() for entry in self.entries)
         print(f"Connecting to DB at {host}:{port} with user '{user}' to database '{dbname}'")
-        # Here you would add your actual DB connection logic
-        # For now, just simulate success:
         customtkinter.CTkMessagebox(title="Connection", message="Successfully connected to the database!")
 
     def sidebar_button_event(self):
         print("Sidebar button clicked")
 
-    def change_appearance_mode_event(self, new_appearance_mode: str):
-        customtkinter.set_appearance_mode(new_appearance_mode)
+    def change_appearance_mode_event(self, new_mode: str):
+        customtkinter.set_appearance_mode(new_mode)
 
     def change_scaling_event(self, new_scaling: str):
-        new_scaling_float = int(new_scaling.replace("%", "")) / 100
-        customtkinter.set_widget_scaling(new_scaling_float)
+        scale = int(new_scaling.replace("%", "")) / 100
+        customtkinter.set_widget_scaling(scale)
 
-    def generate_sql_from_model(self) -> str:
-        try:
-            state = {"question": "what is the total number of Employees"}
-            ret = self.gemini_model.get_sql_query(state)
-            print("Generated SQL:", ret)
-            self.sql_textbox.delete("0.0", "end")
-            self.sql_textbox.insert("0.0", ret["query"])
-            print(ret)
-            return ret
-        except Exception as e:
-            print("Error:", e)
-            self.sql_textbox.delete("0.0", "end")
-            self.sql_textbox.insert("0.0", f"Error: {str(e)}")
-            return ""
+    def _display_result(self, message: str):
+        self.results_textbox.configure(state="normal")
+        self.results_textbox.delete("0.0", "end")
+        self.results_textbox.insert("0.0", message)
+        self.results_textbox.configure(state="disabled")
 
 
 if __name__ == "__main__":
