@@ -1,10 +1,18 @@
 import customtkinter
+from core.loaders import DatabaseLoader, GeminiModelLoader
 
 customtkinter.set_default_color_theme("green")
 
-
+from core.tools import execute_query, generate_answer_from_llm
 class App(customtkinter.CTk):
     def __init__(self):
+        self.build_widgets()
+
+
+    def build_widgets(self):
+        self._db = DatabaseLoader()
+        self.db_instance = self._db.get_instance()
+        self.gemini_model = GeminiModelLoader(self.db_instance)
         super().__init__()
         self.title("Natural SQL")
         self.geometry("1000x700")
@@ -157,28 +165,36 @@ class App(customtkinter.CTk):
         )
         connect_button.grid(row=6, column=0, columnspan=2, pady=20)
 
+
+
     def execute_query(self):
         query = self.query_entry.get()
         if query:
             print(f"User query: {query}")
             # Simulated SQL generation and results display
-            if "from" in query.lower():
-                city = query.lower().split("from")[-1].strip()
-                simulated_sql = f"SELECT * FROM users WHERE city = '{city}'"
-            else:
-                simulated_sql = "SELECT * FROM data LIMIT 10"
+            generated_query_state = self.generate_sql_from_model()
+            executed_results = execute_query(generated_query_state,self.db_instance )
+
+            natural_language_answer = generate_answer_from_llm({
+                "question":"what is the total number of Employees",
+                "query":generated_query_state,
+                "result":f"{executed_results}"
+            }, self.gemini_model.model)
 
             simulated_result = (
-                f"Simulated SQL: {simulated_sql}\n\nSimulated DB Result:\n"
-                "ID | Name  | City\n"
-                "-----------------\n"
-                "1  | Alice | New York\n"
-                "2  | Bob   | London"
+                f"SQL: {generated_query_state}\n\nDB Result:\n {executed_results} \n\n\n\nAnswer: {natural_language_answer.get("answer", "I did not get anything")}"
+                
+               
             )
+            print(natural_language_answer)
+            print("result", executed_results)
             self.results_textbox.configure(state="normal")
             self.results_textbox.delete("0.0", "end")
             self.results_textbox.insert("0.0", simulated_result)
             self.results_textbox.configure(state="disabled")
+            self.sql_textbox.delete("0.0", "end")
+            self.sql_textbox.insert("0.0", f"---")
+            self.generate_sql_from_model()
         else:
             self.results_textbox.configure(state="normal")
             self.results_textbox.delete("0.0", "end")
@@ -205,6 +221,21 @@ class App(customtkinter.CTk):
     def change_scaling_event(self, new_scaling: str):
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
         customtkinter.set_widget_scaling(new_scaling_float)
+
+    def generate_sql_from_model(self) -> str:
+        try:
+            state = {"question": "what is the total number of Employees"}
+            ret = self.gemini_model.get_sql_query(state)
+            print("Generated SQL:", ret)
+            self.sql_textbox.delete("0.0", "end")
+            self.sql_textbox.insert("0.0", ret["query"])
+            print(ret)
+            return ret
+        except Exception as e:
+            print("Error:", e)
+            self.sql_textbox.delete("0.0", "end")
+            self.sql_textbox.insert("0.0", f"Error: {str(e)}")
+            return ""
 
 
 if __name__ == "__main__":
