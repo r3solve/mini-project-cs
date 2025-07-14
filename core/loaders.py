@@ -164,7 +164,7 @@ class GeminiModelLoader:
         """
         Generates stakeholder-friendly Markdown reports with visualizations from provided context.
         """
-        user_prompt = "Generate a full Markdown report from the following context with proper visualizations."
+        user_prompt = "Generate a full Markdown report with charts and tables based on the following context:"
 
         try:
             report_prompt_template = ChatPromptTemplate.from_messages([

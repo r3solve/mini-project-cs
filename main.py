@@ -6,6 +6,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from markdown_pdf import MarkdownPdf, Section
 import datetime
+from tkinter import filedialog
 
 from core.loaders import DatabaseLoader, GeminiModelLoader
 from core.tools import execute_query, generate_answer_from_llm
@@ -22,6 +23,8 @@ class App(customtkinter.CTk):
         self.db_instance = self._db.get_instance()
         self.gemini_model = GeminiModelLoader(self.db_instance)
         super().__init__()
+        self.report_folder = os.getcwd()  # Default save location
+
         self.title("Lazy QL")
         self.geometry("1000x700")
 
@@ -161,13 +164,25 @@ class App(customtkinter.CTk):
         connect_button.grid(row=6, column=0, columnspan=2, pady=20)
 
     def open_settings_popup(self):
-        popup_window = customtkinter.CTkToplevel(self)  # Pass the main window as parent
-        popup_window.title("Settings Window")
-        popup_window.geometry("300x200")
+        popup_window = customtkinter.CTkToplevel(self)
+        popup_window.title("Settings")
+        popup_window.geometry("400x250")
 
-        # Add widgets to the pop-up window
-        label = customtkinter.CTkLabel(popup_window, text="This is a pop-up!")
-        label.pack(pady=20)
+        label = customtkinter.CTkLabel(popup_window, text="Report Save Folder:")
+        label.pack(pady=(20, 5))
+
+        # Display current folder
+        current_folder_label = customtkinter.CTkLabel(popup_window, text=self.report_folder)
+        current_folder_label.pack(pady=5)
+
+        def choose_folder():
+            folder = filedialog.askdirectory(initialdir=self.report_folder)
+            if folder:
+                self.report_folder = folder
+                current_folder_label.configure(text=folder)
+
+        folder_button = customtkinter.CTkButton(popup_window, text="Choose Folder", command=choose_folder)
+        folder_button.pack(pady=10)
 
         close_button = customtkinter.CTkButton(popup_window, text="Close", command=popup_window.destroy)
         close_button.pack(pady=10)
@@ -188,11 +203,12 @@ class App(customtkinter.CTk):
     def generate_reports(self):
         try:
             current_stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            file_name = f"report-{current_stamp}.pdf"
+            file_name = os.path.join(self.report_folder, f"report-{current_stamp}.pdf")
+
 
             # Ask user whether to include process/steps
             include_process = messagebox.askyesno(
-                "Include Process Steps",
+                "Generate Report",
                 "Do you want to include the process/steps in the PDF?"
             )
 
@@ -207,8 +223,13 @@ class App(customtkinter.CTk):
             if include_process:
                 # Assuming context is the same as results_text for now
                 # Replace this with actual data if needed
-                markdown_report = self.gemini_model.generate_reports(context=results_text)
+                markdown_report = self.gemini_model.generate_reports(
+                            context=results_text + 
+                             "\n\n" + "Process Steps:\n" + 
+                             self.results_textbox.get("0.0", "end").strip()   
+                                                                      )
                 pdf.add_section(Section(markdown_report["markdown"]))
+                
             else:
                 # Export only the results_text
                 pdf.add_section(Section(results_text))
