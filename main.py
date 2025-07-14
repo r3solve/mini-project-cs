@@ -1,6 +1,15 @@
 import customtkinter
+import os
+from tkinter import messagebox
+from tkinter.simpledialog import askstring
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from markdown_pdf import MarkdownPdf, Section
+import datetime
+
 from core.loaders import DatabaseLoader, GeminiModelLoader
 from core.tools import execute_query, generate_answer_from_llm
+
 
 customtkinter.set_default_color_theme("green")
 
@@ -13,7 +22,7 @@ class App(customtkinter.CTk):
         self.db_instance = self._db.get_instance()
         self.gemini_model = GeminiModelLoader(self.db_instance)
         super().__init__()
-        self.title("Natural SQL")
+        self.title("Lazy QL")
         self.geometry("1000x700")
 
         self.grid_columnconfigure(1, weight=1)
@@ -25,7 +34,7 @@ class App(customtkinter.CTk):
 
         self.logo_label = customtkinter.CTkLabel(
             self.sidebar_frame,
-            text="Natural SQL",
+            text="LazyQL",
             font=customtkinter.CTkFont(size=20, weight="bold"),
         )
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
@@ -41,7 +50,7 @@ class App(customtkinter.CTk):
         self.sidebar_button_2.grid(row=2, column=0, padx=20, pady=10)
 
         self.sidebar_button_3 = customtkinter.CTkButton(
-            self.sidebar_frame, text="Settings", command=self.sidebar_button_event
+            self.sidebar_frame, text="Settings", command=self.open_settings_popup
         )
         self.sidebar_button_3.grid(row=3, column=0, padx=20, pady=10)
 
@@ -94,7 +103,9 @@ class App(customtkinter.CTk):
         self.main_label.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="w")
 
         self.query_entry = customtkinter.CTkEntry(
-            tab1, placeholder_text="e.g., Show me all users from New York"
+            tab1, placeholder_text="e.g., Show me all users from New York",
+            height=50,
+            font=customtkinter.CTkFont(size=18)
         )
         self.query_entry.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
 
@@ -105,15 +116,30 @@ class App(customtkinter.CTk):
 
         self.sql_textbox = customtkinter.CTkTextbox(tab1, wrap="word")
         self.sql_textbox.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        # self.sql_textbox.configure()
 
-        self.reports_button = customtkinter.CTkButton(
-            tab1, text="Generate Reports", command=self.generate_reports
-        )
-        self.reports_button.grid(row=3, column=0, padx=10, pady=10)
+        self.answer_labelbox = customtkinter.CTkLabel(tab1, text="Answer", font=customtkinter.CTkFont(size=20,) )
+        self.answer_labelbox.grid(row=3, column=0)
+
+       
+       
+
+        self.final_result_textbox = customtkinter.CTkTextbox(tab1, wrap='word')
+        self.final_result_textbox.grid(row=4, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        # self.final_result_textbox.configure(state='disabled')
+
+        self.output_labelbox = customtkinter.CTkLabel(tab1, text="Processs", font=customtkinter.CTkFont(size=20,) )
+        self.output_labelbox.grid(row=5, column=0)
 
         self.results_textbox = customtkinter.CTkTextbox(tab1, wrap="word")
-        self.results_textbox.grid(row=4, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        self.results_textbox.grid(row=6, column=0, padx=10, pady=(0, 10), sticky="nsew")
         self.results_textbox.configure(state="disabled")
+
+        self.reports_button = customtkinter.CTkButton(
+            tab1, text="Export ", command=self.generate_reports
+        )
+        self.reports_button.grid(row=7, column=0, padx=10, pady=10)
+
 
         # === DB Connections Tab ===
         tab2 = self.tabview.tab("DB Connections")
@@ -134,15 +160,67 @@ class App(customtkinter.CTk):
         )
         connect_button.grid(row=6, column=0, columnspan=2, pady=20)
 
+    def open_settings_popup(self):
+        popup_window = customtkinter.CTkToplevel(self)  # Pass the main window as parent
+        popup_window.title("Settings Window")
+        popup_window.geometry("300x200")
+
+        # Add widgets to the pop-up window
+        label = customtkinter.CTkLabel(popup_window, text="This is a pop-up!")
+        label.pack(pady=20)
+
+        close_button = customtkinter.CTkButton(popup_window, text="Close", command=popup_window.destroy)
+        close_button.pack(pady=10)
+
+    def open_database_settings_popup(self):
+        popup_window = customtkinter.CTkToplevel(self)  # Pass the main window as parent
+        popup_window.title("Database Settings")
+        popup_window.geometry("300x200")
+
+        # Add widgets to the pop-up window
+        label = customtkinter.CTkLabel(popup_window, text="This is a pop-up!")
+        label.pack(pady=20)
+
+        close_button = customtkinter.CTkButton(popup_window, text="Close", command=popup_window.destroy)
+        close_button.pack(pady=10)
+
 
     def generate_reports(self):
-        """Generate reports using the agent executor of the answer from the llm to be presented to stakeholders."""
         try:
-           pass
+            current_stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            file_name = f"report-{current_stamp}.pdf"
+
+            # Ask user whether to include process/steps
+            include_process = messagebox.askyesno(
+                "Include Process Steps",
+                "Do you want to include the process/steps in the PDF?"
+            )
+
+            # Get the result text from the textbox
+            self.results_textbox.configure(state="normal")
+            results_text = self.results_textbox.get("0.0", "end").strip()
+            self.results_textbox.configure(state="disabled")
+
+            # Initialize PDF generator
+            pdf = MarkdownPdf(toc_level=2, optimize=True)
+
+            if include_process:
+                # Assuming context is the same as results_text for now
+                # Replace this with actual data if needed
+                markdown_report = self.gemini_model.generate_reports(context=results_text)
+                pdf.add_section(Section(markdown_report["markdown"]))
+            else:
+                # Export only the results_text
+                pdf.add_section(Section(results_text))
+
+            # Save PDF
+            pdf.save(file_name)
+
+            messagebox.showinfo("Export Successful", f"PDF saved as {os.path.abspath(file_name)}")
 
         except Exception as e:
-            self._display_result(f"Error generating reports: {str(e)}")
-        
+            messagebox.showerror("Export Failed", f"Error generating PDF: {str(e)}")
+   
     def execute_query(self):
         query = self.query_entry.get()
         if not query:
@@ -160,6 +238,8 @@ class App(customtkinter.CTk):
         self.results_textbox.configure(state="normal")
         self.results_textbox.delete("0.0", "end")
 
+
+
         for step in self.gemini_model.agent_executor.stream(
             {"messages": [{"role": "user", "content": state["question"]}]},
             stream_mode="values",
@@ -167,13 +247,29 @@ class App(customtkinter.CTk):
             step_output = step["messages"][-1].content
             self.results_textbox.insert("end", f"Step Output:\n{step_output}\n\n")
             self.results_textbox.update_idletasks()
-
+        
+        self.final_result_textbox.configure(state="normal")
+        self.final_result_textbox.delete("0.0", "end")
+        
         self.results_textbox.insert("end", f"Generated SQL:\n{state['query']}\n\n")
         self.results_textbox.insert("end", f"Natural Language Answer:\n{state['answer']}\n")
         self.results_textbox.configure(state="disabled")
+        
+
 
         self.sql_textbox.delete("0.0", "end")
         self.sql_textbox.insert("0.0", state["query"])
+
+
+
+        self.final_result_textbox.insert("end", f"Natural Language Answer:\n{state['answer']}\n")
+        self.final_result_textbox.configure()
+
+        try:
+            mark_down_code = self.gemini_model.generate_reports(f"{state['answer']}")
+        except:
+            print("could not generate reports")
+       
 
     def generate_sql_from_model(self) -> dict:
         try:
@@ -181,7 +277,7 @@ class App(customtkinter.CTk):
             if not question:
                 raise ValueError("Empty query")
 
-            state = {"question": question}
+            state =  {"question": question}
             ret = self.gemini_model.get_sql_query(state)
             state["query"] = ret["query"]
             return state

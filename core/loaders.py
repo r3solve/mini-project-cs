@@ -8,11 +8,10 @@ from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent 
 
+from core.helper_classes import QueryOutput, State, ReportsOutPut
+from core.tools import agent_builder
 
-from core.helper_classes import QueryOutput, State
-from core.tools import  agent_builder
-
-load_dotenv()  # Load environment variables
+load_dotenv()
 
 langsmith_api_key = os.getenv('LANGSMITH_API_KEY')
 database_url = os.getenv('DATABASE_URL')
@@ -26,46 +25,37 @@ class DatabaseLoader:
     def get_instance(self) -> Annotated[SQLDatabase, Any]:
         try:
             self.db = SQLDatabase.from_uri(self.db_url)
-            # print(self.db.dialect)
-            # print(self.db.get_usable_table_names())
-            self.db.run("SELECT * FROM Artist LIMIT 10;")
+            self.db.run("SELECT type, name, tbl_name, sql FROM sqlite_master;")
             return self.db
         except Exception as e:
-            raise Exception(f"Error Connecting to database: {str(e)}")
+            raise Exception(f"Error connecting to database: {str(e)}")
 
     def get_health(self) -> bool:
-        # Placeholder for actual health logic
         return self.db is not None
 
 
 class GeminiModelLoader:
-    '''
-    Initialize the Google API model
-    '''
+    """
+    Initialize the Google Gemini Model with database interaction.
+    Provides SQL generation and report generation functionality.
+    """
+
     def __init__(self, db):
         self.model = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
         self.db = db
-        self.toolkit = SQLDatabaseToolkit(db=self.db,  llm=self.model)
+        self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.model)
         self.tools = self.toolkit.get_tools()
-    
         self.agent_executor = agent_builder(db=self.db, model=self.model)
 
-
         self._system_message = """
-            Given an input question, create a syntactically correct {dialect} query to
-            run to help find the answer. Unless the user specifies in his question a
-            specific number of examples they wish to obtain, always limit your query to
-            at most {top_k} results. You can order the results by a relevant column to
-            return the most interesting examples in the database.
+            Given an input question, create a syntactically correct {dialect} query
+            to run to help find the answer. Unless the user specifies a specific number 
+            of examples they wish to obtain, always limit your query to at most {top_k} results.
+            
+            Never query for all columns; select only the relevant ones.
 
-            Never query for all the columns from a specific table, only ask for a the
-            few relevant columns given the question.
+            Use only columns and tables present in this schema:
 
-            Pay attention to use only the column names that you can see in the schema
-            description. Be careful to not query for columns that do not exist. Also,
-            pay attention to which column is in which table.
-
-            Only use the following tables:
             {table_info}
         """
 
@@ -76,24 +66,65 @@ class GeminiModelLoader:
             specifies a specific number of examples they wish to obtain, always limit your
             query to at most {top_k} results.
 
-            You can order the results by a relevant column to return the most interesting
-            examples in the database. Never query for all the columns from a specific table,
-            only ask for the relevant columns given the question.
+            Only query for relevant columns, not *.
 
-            You MUST double check your query before executing it. If you get an error while
-            executing a query, rewrite the query and try again.
+            You MUST double-check your query before executing it.
+            Do NOT make any DML statements (INSERT, UPDATE, DELETE, DROP).
 
-            DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the
-            database.
+            Start by reviewing the available tables and their schemas.
+        """.format(
+            dialect="SQLite",
+            top_k=5,
+        )
 
-            To start you should ALWAYS look at the tables in the database to see what you
-            can query. Do NOT skip this step.
+        self.reports_system_message = """
+        You are a data reporting assistant that generates concise, insightful reports from database context. 
+        Your output must be in Markdown format, ready to present to stakeholders who are not necessarily technical.
 
-            Then you should query the schema of the most relevant tables.
-            """.format(
-                dialect="SQLite",
-                top_k=5,
-            )
+        **Your task:**
+        - Create syntactically correct **Markdown (.md)** reports.
+        - Analyze the provided context and extract meaningful insights.
+        - Write clear summaries, highlighting key trends, anomalies, or actionable points.
+        - Use **visualizations** (mermaid.js charts, markdown tables) to make the data intuitive and engaging.
+
+        **Guidelines:**
+        - **Audience:** Business stakeholders and decision-makers.
+        - **Tone:** Professional, clear, and direct.
+        - **Visuals:** Only include graphs that add genuine insight. Use bar charts, line graphs, pie charts, or tables.
+        
+        **Structure:**
+        1. **Title** – A clear, engaging title for the report.
+        2. **Executive Summary** – 2-3 sentence overview of findings.
+        3. **Key Metrics** – Present important numbers in bold or table format.
+        4. **Visualizations** – Use mermaid charts or Markdown tables. Provide captions.
+        5. **Recommendations / Next Steps** – Offer actionable suggestions.
+
+        **Example Output:**
+
+        # [Report Title]
+
+        ## Executive Summary
+        [Brief summary of the data insights.]
+
+        ## Key Metrics
+        | Metric | Value |
+        |---------|-------|
+        | Example Metric | **1234** |
+
+        ## Visualizations
+
+        ```mermaid
+        [Insert relevant mermaid chart code here]
+        ```
+
+        *Caption: Explain what this chart shows*
+
+        ## Recommendations
+        - [Actionable recommendation 1]
+        - [Actionable recommendation 2]
+
+        **Context to analyze:** {context}
+        """
 
     @property
     def system_message(self):
@@ -104,6 +135,9 @@ class GeminiModelLoader:
         self._system_message = message
 
     def get_sql_query(self, state: State):
+        """
+        Generates a SQL query from a natural language question using the LLM.
+        """
         user_prompt = "Question: {input}"
 
         try:
@@ -124,19 +158,25 @@ class GeminiModelLoader:
 
             return {"query": result["query"]}
         except Exception as e:
-            print("LLM or database execution error:", e)
-            raise Exception(f"Error generating SQL: {e}")
-    
+            raise Exception(f"Error generating SQL: {str(e)}")
 
-    def generate_reports(self, state: State):
-        """Generate reports using the agent executor. of the answer from the llm to be presented to stakeholders."""
-        
+    def generate_reports(self, context: str):
+        """
+        Generates stakeholder-friendly Markdown reports with visualizations from provided context.
+        """
+        user_prompt = "Generate a full Markdown report from the following context with proper visualizations."
+
         try:
-            response = self.agent_executor.invoke(
-                {"messages": [HumanMessage(content=state["question"])]}
-            )
-            state["query"] = response["query"]
-            return state
+            report_prompt_template = ChatPromptTemplate.from_messages([
+                ("system", self.reports_system_message.format(context=context)),
+                ("user", user_prompt)
+            ])
+
+            prompt = report_prompt_template.invoke({})
+
+            structured_llm = self.model.with_structured_output(ReportsOutPut)
+            result = structured_llm.invoke(prompt)
+
+            return {"markdown": result["markdown"]}
         except Exception as e:
-            print("Error generating reports:", e)
-            raise Exception(f"Error generating reports: {e}")
+            raise Exception(f"Error generating report: {str(e)}")

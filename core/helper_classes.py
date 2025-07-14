@@ -7,6 +7,12 @@ class QueryOutput(TypedDict):
 
     query: Annotated[str, ..., "Syntactically valid SQL query."]
 
+class ReportsOutPut(TypedDict):
+    """Generated MARKDOWN code."""
+
+    markdown: Annotated[str, ..., "Syntactically valid SQL query."]
+
+
 class State(TypedDict):
     question: str
     query: str

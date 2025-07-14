@@ -1,0 +1,3 @@
+The Project should have the ability to export to graphs, charts and visualizations
+    This should be emplemented by giving the ai the generated sql with data that can then be used to generated dynamic
+        code from report lab and export it, it should use code executors
