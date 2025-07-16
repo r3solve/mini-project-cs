@@ -1,5 +1,7 @@
 import customtkinter
 import os
+from pathlib import Path
+
 from tkinter import messagebox
 from tkinter.simpledialog import askstring
 from reportlab.lib.pagesizes import letter
@@ -16,12 +18,13 @@ customtkinter.set_default_color_theme("green")
 
 class App(customtkinter.CTk):
     def __init__(self):
-        self.build_widgets()
 
-    def build_widgets(self):
-        self._db = DatabaseLoader()
-        self.db_instance = self._db.get_instance()
-        self.gemini_model = GeminiModelLoader(self.db_instance)
+        self.directory_path = Path("reports")
+
+        self.directory_path.mkdir(parents=True, exist_ok=True)
+        self._db = None
+        self.db_instance = None
+        self.gemini_model = None
         super().__init__()
         self.report_folder = os.getcwd()  # Default save location
 
@@ -30,7 +33,10 @@ class App(customtkinter.CTk):
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
+        self.build_widgets()
 
+    def build_widgets(self):
+       
         self.sidebar_frame = customtkinter.CTkFrame(self, width=180, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=1)
@@ -47,16 +53,14 @@ class App(customtkinter.CTk):
         )
         self.sidebar_button_1.grid(row=1, column=0, padx=20, pady=10)
 
-        self.sidebar_button_2 = customtkinter.CTkButton(
-            self.sidebar_frame, text="Query History", command=self.sidebar_button_event
-        )
-        self.sidebar_button_2.grid(row=2, column=0, padx=20, pady=10)
+      
 
         self.sidebar_button_3 = customtkinter.CTkButton(
             self.sidebar_frame, text="Settings", command=self.open_settings_popup
         )
         self.sidebar_button_3.grid(row=3, column=0, padx=20, pady=10)
 
+        
         self.appearance_mode_label = customtkinter.CTkLabel(
             self.sidebar_frame, text="Appearance Mode:", anchor="w"
         )
@@ -148,20 +152,39 @@ class App(customtkinter.CTk):
         tab2 = self.tabview.tab("DB Connections")
         tab2.grid_columnconfigure(1, weight=1)
 
-        labels = ["Host:", "Port:", "Username:", "Password:", "Database Name:"]
-        placeholders = ["localhost", "5432", "user", "password", "mydatabase"]
-        self.entries = []
+        page_label = customtkinter.CTkLabel(
+            tab2, text="Database Connection Settings", font=customtkinter.CTkFont(size=16)
+        )
+        page_label.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 5), sticky="w")
 
-        for i, (label, placeholder) in enumerate(zip(labels, placeholders)):
-            customtkinter.CTkLabel(tab2, text=label).grid(row=i+1, column=0, padx=10, pady=5, sticky="e")
-            entry = customtkinter.CTkEntry(tab2, placeholder_text=placeholder, show="*" if label == "Password:" else None)
-            entry.grid(row=i+1, column=1, padx=10, pady=5, sticky="ew")
-            self.entries.append(entry)
+        sqlite3Host = customtkinter.CTkEntry(tab2, placeholder_text="Host url for SQLite3 eg: ./db.sqlite3")
+        sqlite3Host.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+        self.sqlite3Host = customtkinter.CTkEntry(tab2, placeholder_text="Select SQLite3 DB file")
+        self.sqlite3Host.grid(row=1, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+
+        # Browse button to select database file
+        browse_button = customtkinter.CTkButton(tab2, text="Browse", command=self.browse_database_file)
+        browse_button.grid(row=1, column=2, padx=10, pady=5)
 
         connect_button = customtkinter.CTkButton(
             tab2, text="Connect", command=self.connect_to_database
         )
-        connect_button.grid(row=6, column=0, columnspan=2, pady=20)
+        connect_button.grid(row=2, column=0, columnspan=3, pady=20)
+
+
+
+    def browse_database_file(self):
+        """
+        Opens a file dialog to select a SQLite3 database file.
+        """
+        file_path = filedialog.askopenfilename(
+            title="Select SQLite3 Database File",
+            filetypes=[("SQLite3 Database Files", "*.sqlite3"), ("SQLite3 Database Files", "*.db"), ("All Files", "*.*")]
+        )
+        if file_path:
+            self.sqlite3Host.delete(0, "end")
+            self.sqlite3Host.insert(0, file_path)
+
 
     def open_settings_popup(self):
         popup_window = customtkinter.CTkToplevel(self)
@@ -203,7 +226,8 @@ class App(customtkinter.CTk):
     def generate_reports(self):
         try:
             current_stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            file_name = os.path.join(self.report_folder, f"report-{current_stamp}.pdf")
+            file_name = os.path.join(self.directory_path, f"report-{current_stamp}.pdf")
+
 
 
             # Ask user whether to include process/steps
@@ -308,10 +332,24 @@ class App(customtkinter.CTk):
             return {"question": "", "query": "", "result": "", "answer": ""}
 
     def connect_to_database(self):
-        host, port, user, password, dbname = (entry.get() for entry in self.entries)
-        print(f"Connecting to DB at {host}:{port} with user '{user}' to database '{dbname}'")
-        customtkinter.CTkMessagebox(title="Connection", message="Successfully connected to the database!")
-
+        host = self.sqlite3Host.get()
+        if not host:
+            messagebox.showerror("Connection Error", "Please select a database file first.")
+            return
+        host_path = Path(host)
+        if not host_path.is_absolute():
+            host = str(Path.cwd() / host_path)
+        conntection_string = f"sqlite:///{host}"
+        print("connection_string", conntection_string)
+        try:
+            self.db = DatabaseLoader(conntection_string)
+            self.db_instance = self.db.get_instance()
+            self.gemini_model = GeminiModelLoader(self.db_instance)
+            messagebox.showinfo("Connection Successful", f"Connected to database at {host}")
+        except Exception as e:
+            messagebox.showerror("Connection Error", f"Failed to connect to database: {str(e)}")
+            return
+        
     def sidebar_button_event(self):
         print("Sidebar button clicked")
 
