@@ -610,7 +610,8 @@ class App(customtkinter.CTk):
             return
         
     def sidebar_button_event(self):
-        print("Sidebar button clicked")
+        # Switch to the "Main Query" tab when the sidebar button is clicked
+        self.tabview.set("Main Query")
 
     def change_appearance_mode_event(self, new_mode: str):
         customtkinter.set_appearance_mode(new_mode)
