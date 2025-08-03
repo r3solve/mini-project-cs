@@ -16,7 +16,6 @@ load_dotenv('.env.production')
 
 langsmith_api_key = os.getenv('LANGSMITH_API_KEY')
 database_url = os.getenv('DATABASE_URL')
-# os.environ["GOOGLE_API_KEY"]  = "AIzaSyDKgDJfqCaNGmElt6KrUOF3mFngD2u5p4U"
 
 
 class DatabaseLoader:
