@@ -29,13 +29,16 @@ def build_langchain_graph(write_query, execute_query, generate_answer):
     return graph_builder.compile()
 
 
-def agent_builder(db, model):
+def agent_builder(db, model, db_type="sqlite"):
     """Build a LangGraph agent for SQL database interaction."""
     from langchain_community.agent_toolkits import SQLDatabaseToolkit
     from langgraph.prebuilt import create_react_agent
 
     toolkit = SQLDatabaseToolkit(db=db, llm=model)
     tools = toolkit.get_tools()
+
+    # Determine dialect from database type
+    dialect = "PostgreSQL" if db_type == "postgresql" else "SQLite"
 
     system_message = """
         You are an agent designed to interact with a SQL database.
@@ -59,7 +62,7 @@ def agent_builder(db, model):
 
         Then you should query the schema of the most relevant tables.
     """.format(
-        dialect=db.dialect,
+        dialect=dialect,
         top_k=5,
     )
 

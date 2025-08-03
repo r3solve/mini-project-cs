@@ -11,27 +11,48 @@ from langgraph.prebuilt import create_react_agent
 from core.helper_classes import QueryOutput, State, ReportsOutPut
 from core.tools import agent_builder
 
-load_dotenv()
+load_dotenv('.env.production')
+
 
 langsmith_api_key = os.getenv('LANGSMITH_API_KEY')
 database_url = os.getenv('DATABASE_URL')
+# os.environ["GOOGLE_API_KEY"]  = "AIzaSyDKgDJfqCaNGmElt6KrUOF3mFngD2u5p4U"
 
 
 class DatabaseLoader:
     def __init__(self, db_url="sqlite:///Chinook.db") -> None:
         self.db = None
         self.db_url = db_url
+        self.db_type = self._determine_db_type(db_url)
+
+    def _determine_db_type(self, db_url: str) -> str:
+        """Determine if the database is SQLite or PostgreSQL based on the URL."""
+        if db_url.startswith("sqlite://"):
+            return "sqlite"
+        elif db_url.startswith("postgresql://") or db_url.startswith("postgres://"):
+            return "postgresql"
+        else:
+            raise ValueError(f"Unsupported database URL format: {db_url}")
 
     def get_instance(self) -> Annotated[SQLDatabase, Any]:
         try:
             self.db = SQLDatabase.from_uri(self.db_url)
-            self.db.run("SELECT type, name, tbl_name, sql FROM sqlite_master;")
+            
+            # Test connection with appropriate query based on database type
+            if self.db_type == "sqlite":
+                self.db.run("SELECT type, name, tbl_name, sql FROM sqlite_master;")
+            elif self.db_type == "postgresql":
+                self.db.run("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+            
             return self.db
         except Exception as e:
             raise Exception(f"Error connecting to database: {str(e)}")
 
     def get_health(self) -> bool:
         return self.db is not None
+
+    def get_db_type(self) -> str:
+        return self.db_type
 
 
 class GeminiModelLoader:
@@ -40,12 +61,13 @@ class GeminiModelLoader:
     Provides SQL generation and report generation functionality.
     """
 
-    def __init__(self, db):
+    def __init__(self, db, db_type="sqlite"):
         self.model = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
         self.db = db
+        self.db_type = db_type
         self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.model)
         self.tools = self.toolkit.get_tools()
-        self.agent_executor = agent_builder(db=self.db, model=self.model)
+        self.agent_executor = agent_builder(db=self.db, model=self.model, db_type=db_type)
 
         self._system_message = """
             Given an input question, create a syntactically correct {dialect} query
@@ -59,6 +81,9 @@ class GeminiModelLoader:
             {table_info}
         """
 
+        # Determine dialect from database type
+        dialect = "PostgreSQL" if db_type == "postgresql" else "SQLite"
+        
         self.agent_system_message = """
             You are an agent designed to interact with a SQL database.
             Given an input question, create a syntactically correct {dialect} query to run,
@@ -73,7 +98,7 @@ class GeminiModelLoader:
 
             Start by reviewing the available tables and their schemas.
         """.format(
-            dialect="SQLite",
+            dialect=dialect,
             top_k=5,
         )
 
