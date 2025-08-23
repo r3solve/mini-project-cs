@@ -15,7 +15,7 @@ from reportlab.lib.units import inch
 
 from sqlalchemy import create_engine
 
-os.environ["GOOGLE_API_KEY"] = ""
+os.environ["GOOGLE_API_KEY"] = "AIzaSyAJf60KmfBuh4Xnt6wQfSm5LEM3MnAoDIM"
 
 
 # Import your core modules
