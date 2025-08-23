@@ -153,7 +153,7 @@ mdurl==0.1.2
 multidict==6.6.3
 mypy-extensions==1.1.0
 narwhals==2.1.2
-numpy==2.3.1
+numpy
 orjson==3.10.18
 ormsgpack==1.10.0
 packaging==24.2
