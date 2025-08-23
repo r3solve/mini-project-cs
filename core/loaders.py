@@ -8,6 +8,7 @@ from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent 
 
+
 from core.helper_classes import QueryOutput, State, ReportsOutPut
 from core.tools import agent_builder
 
@@ -117,11 +118,11 @@ class GeminiModelLoader:
         - **Visuals:** Only include graphs that add genuine insight. Use bar charts, line graphs, pie charts, or tables.
         
         **Structure:**
-        1. **Title** – A clear, engaging title for the report.
-        2. **Executive Summary** – 2-3 sentence overview of findings.
-        3. **Key Metrics** – Present important numbers in bold or table format.
-        4. **Visualizations** – Use mermaid charts or Markdown tables. Provide captions.
-        5. **Recommendations / Next Steps** – Offer actionable suggestions.
+        1. **Title** â€“ A clear, engaging title for the report.
+        2. **Executive Summary** â€“ 2-3 sentence overview of findings.
+        3. **Key Metrics** â€“ Present important numbers in bold or table format.
+        4. **Visualizations** â€“ Use mermaid charts or Markdown tables. Provide captions.
+        5. **Recommendations / Next Steps** â€“ Offer actionable suggestions.
 
         **Example Output:**
 

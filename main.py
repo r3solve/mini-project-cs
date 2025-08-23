@@ -1,17 +1,18 @@
-import customtkinter
 import os
 from pathlib import Path
-
+import customtkinter
 from tkinter import messagebox
-from tkinter.simpledialog import askstring
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
+import csv
+import io
+import re
 from markdown_pdf import MarkdownPdf, Section
 import datetime
 from tkinter import filedialog
 
 from core.loaders import DatabaseLoader, GeminiModelLoader
 from core.tools import execute_query, generate_answer_from_llm
+
+os.environ["GOOGLE_API_KEY"] = "AIzaSyDKgDJfqCaNGmElt6KrUOF3mFngD2u5p4U"
 
 
 customtkinter.set_default_color_theme("green")
@@ -37,7 +38,7 @@ class App(customtkinter.CTk):
         self.build_widgets()
 
     def build_widgets(self):
-       
+
         self.sidebar_frame = customtkinter.CTkFrame(self, width=180, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=1)
@@ -54,14 +55,14 @@ class App(customtkinter.CTk):
         )
         self.sidebar_button_1.grid(row=1, column=0, padx=20, pady=10)
 
-      
+
 
         self.sidebar_button_3 = customtkinter.CTkButton(
             self.sidebar_frame, text="Settings", command=self.open_settings_popup
         )
         self.sidebar_button_3.grid(row=3, column=0, padx=20, pady=10)
 
-        
+
         self.appearance_mode_label = customtkinter.CTkLabel(
             self.sidebar_frame, text="Appearance Mode:", anchor="w"
         )
@@ -111,7 +112,7 @@ class App(customtkinter.CTk):
         self.main_label.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="w")
 
         self.query_entry = customtkinter.CTkEntry(
-            tab1, placeholder_text="e.g., Show me all users from New York",
+            tab1, placeholder_text="e.g., Ask you question about your data, be specific ",
             height=50,
             font=customtkinter.CTkFont(size=18)
         )
@@ -122,26 +123,25 @@ class App(customtkinter.CTk):
         )
         self.exec_raw_button.grid(row=1, column=1, padx=10, pady=10)
 
-        self.sql_textbox = customtkinter.CTkTextbox(tab1, wrap="word")
+        self.sql_textbox = customtkinter.CTkTextbox(tab1, wrap="word", font=customtkinter.CTkFont(size=18))
         self.sql_textbox.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="nsew")
         # self.sql_textbox.configure()
 
-        self.answer_labelbox = customtkinter.CTkLabel(tab1, text="Answer", font=customtkinter.CTkFont(size=20,) )
+        self.answer_labelbox = customtkinter.CTkLabel(tab1, text="Answer", font=customtkinter.CTkFont(size=18,) )
         self.answer_labelbox.grid(row=3, column=0)
 
-       
-       
 
-        self.final_result_textbox = customtkinter.CTkTextbox(tab1, wrap='word')
+
+        self.final_result_textbox = customtkinter.CTkTextbox(tab1, wrap='word', font=customtkinter.CTkFont(size=18))
         self.final_result_textbox.grid(row=4, column=0, padx=10, pady=(0, 10), sticky="nsew")
-        # self.final_result_textbox.configure(state='disabled')
+        self.final_result_textbox.configure(state='disabled')
 
-        self.output_labelbox = customtkinter.CTkLabel(tab1, text="Processs", font=customtkinter.CTkFont(size=20,) )
-        self.output_labelbox.grid(row=5, column=0)
+        # self.output_labelbox = customtkinter.CTkLabel(tab1, text="Processs", font=customtkinter.CTkFont(size=30,) )
+        # self.output_labelbox.grid(row=5, column=0)
 
-        self.results_textbox = customtkinter.CTkTextbox(tab1, wrap="word")
-        self.results_textbox.grid(row=6, column=0, padx=10, pady=(0, 10), sticky="nsew")
-        self.results_textbox.configure(state="disabled")
+        # self.results_textbox = customtkinter.CTkTextbox(tab1, wrap="word")
+        # self.results_textbox.grid(row=6, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        # self.results_textbox.configure(state="disabled")
 
         # Export buttons frame
         export_frame = customtkinter.CTkFrame(tab1)
@@ -172,7 +172,7 @@ class App(customtkinter.CTk):
         # Database Type Selection
         db_type_label = customtkinter.CTkLabel(tab2, text="Database Type:", anchor="w")
         db_type_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        
+
         self.db_type_var = customtkinter.StringVar(value="sqlite")
         self.db_type_menu = customtkinter.CTkOptionMenu(
             tab2,
@@ -185,7 +185,7 @@ class App(customtkinter.CTk):
         # SQLite Connection Fields
         self.sqlite_label = customtkinter.CTkLabel(tab2, text="SQLite Database File:", anchor="w")
         self.sqlite_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
-        
+
         self.sqlite3Host = customtkinter.CTkEntry(tab2, placeholder_text="Select SQLite3 DB file")
         self.sqlite3Host.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
@@ -195,31 +195,31 @@ class App(customtkinter.CTk):
         # PostgreSQL Connection Fields
         self.postgres_label = customtkinter.CTkLabel(tab2, text="PostgreSQL Connection:", anchor="w")
         self.postgres_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
-        
+
         # PostgreSQL host
         self.postgres_host_label = customtkinter.CTkLabel(tab2, text="Host:", anchor="w")
         self.postgres_host_label.grid(row=4, column=0, padx=10, pady=2, sticky="w")
         self.postgres_host = customtkinter.CTkEntry(tab2, placeholder_text="localhost")
         self.postgres_host.grid(row=4, column=1, padx=10, pady=2, sticky="ew")
-        
+
         # PostgreSQL port
         self.postgres_port_label = customtkinter.CTkLabel(tab2, text="Port:", anchor="w")
         self.postgres_port_label.grid(row=5, column=0, padx=10, pady=2, sticky="w")
         self.postgres_port = customtkinter.CTkEntry(tab2, placeholder_text="5432")
         self.postgres_port.grid(row=5, column=1, padx=10, pady=2, sticky="ew")
-        
+
         # PostgreSQL database name
         self.postgres_db_label = customtkinter.CTkLabel(tab2, text="Database:", anchor="w")
         self.postgres_db_label.grid(row=6, column=0, padx=10, pady=2, sticky="w")
         self.postgres_db = customtkinter.CTkEntry(tab2, placeholder_text="database_name")
         self.postgres_db.grid(row=6, column=1, padx=10, pady=2, sticky="ew")
-        
+
         # PostgreSQL username
         self.postgres_user_label = customtkinter.CTkLabel(tab2, text="Username:", anchor="w")
         self.postgres_user_label.grid(row=7, column=0, padx=10, pady=2, sticky="w")
         self.postgres_user = customtkinter.CTkEntry(tab2, placeholder_text="username")
         self.postgres_user.grid(row=7, column=1, padx=10, pady=2, sticky="ew")
-        
+
         # PostgreSQL password
         self.postgres_password_label = customtkinter.CTkLabel(tab2, text="Password:", anchor="w")
         self.postgres_password_label.grid(row=8, column=0, padx=10, pady=2, sticky="w")
@@ -245,7 +245,7 @@ class App(customtkinter.CTk):
             self.sqlite_label.grid()
             self.sqlite3Host.grid()
             self.browse_button.grid()
-            
+
             # Hide PostgreSQL fields
             self.postgres_label.grid_remove()
             self.postgres_host_label.grid_remove()
@@ -263,7 +263,7 @@ class App(customtkinter.CTk):
             self.sqlite_label.grid_remove()
             self.sqlite3Host.grid_remove()
             self.browse_button.grid_remove()
-            
+
             # Show PostgreSQL fields
             self.postgres_label.grid()
             self.postgres_host_label.grid()
@@ -352,12 +352,12 @@ class App(customtkinter.CTk):
                 # Assuming context is the same as results_text for now
                 # Replace this with actual data if needed
                 markdown_report = self.gemini_model.generate_reports(
-                            context=results_text + 
-                             "\n\n" + "Process Steps:\n" + 
-                             self.results_textbox.get("0.0", "end").strip()   
+                            context=results_text +
+                             "\n\n" + "Process Steps:\n" +
+                             self.results_textbox.get("0.0", "end").strip()
                                                                       )
                 pdf.add_section(Section(markdown_report["markdown"]))
-                
+
             else:
                 # Export only the results_text
                 pdf.add_section(Section(results_text))
@@ -390,7 +390,7 @@ class App(customtkinter.CTk):
                 defaultextension=".csv",
                 filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
             )
-            
+
             if not file_path:
                 return  # User cancelled
 
@@ -400,10 +400,10 @@ class App(customtkinter.CTk):
             else:
                 # Execute the query and get results
                 result = self.db_instance.run(sql_query)
-            
+
             # Convert result to CSV format
             csv_content = self._convert_result_to_csv(result)
-            
+
             # Write to file
             with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
                 csvfile.write(csv_content)
@@ -415,54 +415,52 @@ class App(customtkinter.CTk):
 
     def _convert_result_to_csv(self, result):
         """Convert database query result to CSV format."""
-        import csv
-        import io
-        import re
-        
+
+
         # Create a string buffer to write CSV data
         output = io.StringIO()
         writer = csv.writer(output)
-        
+
         try:
             if isinstance(result, str):
                 # Clean up the result string
                 result = result.strip()
-                
+
                 # Split into lines
                 lines = result.split('\n')
-                
+
                 # Find the data section (usually after headers)
                 data_start = 0
                 headers = []
                 data_rows = []
-                
+
                 for i, line in enumerate(lines):
                     line = line.strip()
                     if not line:
                         continue
-                    
+
                     # Look for separator lines (like "----" or "====")
                     if re.match(r'^[-=+]+$', line):
                         data_start = i + 1
                         break
-                    
+
                     # If line contains pipe separators, it might be a header
                     if '|' in line:
                         # Extract headers from pipe-separated format
                         headers = [cell.strip() for cell in line.split('|') if cell.strip()]
                         data_start = i + 1
                         break
-                
+
                 # Process data rows
                 for line in lines[data_start:]:
                     line = line.strip()
                     if not line:
                         continue
-                    
+
                     # Skip separator lines
                     if re.match(r'^[-=+]+$', line):
                         continue
-                    
+
                     # Parse the row
                     if '|' in line:
                         # Pipe-separated format
@@ -470,10 +468,10 @@ class App(customtkinter.CTk):
                     else:
                         # Try to split by whitespace (for simple cases)
                         row = [cell.strip() for cell in line.split() if cell.strip()]
-                    
+
                     if row:
                         data_rows.append(row)
-                
+
                 # If we found structured data, write it
                 if headers and data_rows:
                     writer.writerow(headers)
@@ -497,16 +495,19 @@ class App(customtkinter.CTk):
                 # If result is not a string, write it as is
                 writer.writerow(['Result'])
                 writer.writerow([str(result)])
-                
+
         except Exception as e:
             # Fallback: write the raw result
             writer.writerow(['Result'])
             writer.writerow([str(result)])
-        
+
         return output.getvalue()
-   
+
     def execute_query(self):
+
         query = self.query_entry.get()
+
+
         if not query:
             self._display_result("Please enter a query.")
             return
@@ -515,33 +516,33 @@ class App(customtkinter.CTk):
         state = self.generate_sql_from_model()
         executed_results = execute_query(state, self.db_instance)
         state["result"] = executed_results["result"]
-        
+
         # Store the results for CSV export
         self.last_query_results = executed_results["result"]
 
         natural_language_answer = generate_answer_from_llm(state, self.gemini_model.model)
         state["answer"] = natural_language_answer["answer"]
 
-        self.results_textbox.configure(state="normal")
-        self.results_textbox.delete("0.0", "end")
+        # self.results_textbox.configure(state="normal")
+        # self.results_textbox.delete("0.0", "end")
 
 
 
-        for step in self.gemini_model.agent_executor.stream(
-            {"messages": [{"role": "user", "content": state["question"]}]},
-            stream_mode="values",
-        ):
-            step_output = step["messages"][-1].content
-            self.results_textbox.insert("end", f"Step Output:\n{step_output}\n\n")
-            self.results_textbox.update_idletasks()
-        
+        # for step in self.gemini_model.agent_executor.stream(
+        #     {"messages": [{"role": "user", "content": state["question"]}]},
+        #     stream_mode="values",
+        # ):
+        #     step_output = step["messages"][-1].content
+        #     self.results_textbox.insert("end", f"Step Output:\n{step_output}\n\n")
+        #     self.results_textbox.update_idletasks()
+
         self.final_result_textbox.configure(state="normal")
         self.final_result_textbox.delete("0.0", "end")
-        
-        self.results_textbox.insert("end", f"Generated SQL:\n{state['query']}\n\n")
-        self.results_textbox.insert("end", f"Natural Language Answer:\n{state['answer']}\n")
-        self.results_textbox.configure(state="disabled")
-        
+
+        # self.results_textbox.insert("end", f"Generated SQL:\n{state['query']}\n\n")
+        # self.results_textbox.insert("end", f"\n{state['answer']}\n")
+        # self.results_textbox.configure(state="disabled")
+
 
 
         self.sql_textbox.delete("0.0", "end")
@@ -549,14 +550,14 @@ class App(customtkinter.CTk):
 
 
 
-        self.final_result_textbox.insert("end", f"Natural Language Answer:\n{state['answer']}\n")
+        self.final_result_textbox.insert("end", f"\n{state['answer']}\n")
         self.final_result_textbox.configure()
 
         try:
             mark_down_code = self.gemini_model.generate_reports(f"{state['answer']}")
         except:
             print("could not generate reports")
-       
+
 
     def generate_sql_from_model(self) -> dict:
         try:
@@ -575,7 +576,7 @@ class App(customtkinter.CTk):
 
     def connect_to_database(self):
         db_type = self.db_type_var.get()
-        
+
         if db_type == "sqlite":
             host = self.sqlite3Host.get()
             if not host:
@@ -591,13 +592,13 @@ class App(customtkinter.CTk):
             database = self.postgres_db.get().strip()
             username = self.postgres_user.get().strip()
             password = self.postgres_password.get()
-            
+
             if not all([host, database, username]):
                 messagebox.showerror("Connection Error", "Please fill in all required PostgreSQL fields (Host, Database, Username).")
                 return
-            
+
             connection_string = f"postgresql://{username}:{password}@{host}:{port}/{database}"
-        
+
         print("connection_string", connection_string)
         try:
             self.db = DatabaseLoader(connection_string)
@@ -608,7 +609,7 @@ class App(customtkinter.CTk):
         except Exception as e:
             messagebox.showerror("Connection Error", f"Failed to connect to database: {str(e)}")
             return
-        
+
     def sidebar_button_event(self):
         # Switch to the "Main Query" tab when the sidebar button is clicked
         self.tabview.set("Main Query")

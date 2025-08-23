@@ -67,3 +67,7 @@ def agent_builder(db, model, db_type="sqlite"):
     )
 
     return create_react_agent(model, tools, prompt=system_message)
+
+
+def code_agent():
+    return ""
